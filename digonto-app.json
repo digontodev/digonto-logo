@@ -1,0 +1,41 @@
+{
+  "slug": "digonto-logo",
+  "name": "Digonto Logo",
+  "version": "1.2.6",
+  "comment": "Make a complete logo and brand: ideas, customizing, SVG/PNG/PDF/EPS/AI, favicon, social images and a brand guide",
+  "entry": "digonto_logo.py",
+  "files": [
+    "digonto_logo.py",
+    "digonto_ui.py",
+    "logokit",
+    "assets",
+    "requirements.txt",
+    "README.txt"
+  ],
+  "requirements": "requirements.txt",
+  "check": "import PySide6.QtWidgets, PySide6.QtSvg; import logokit.compose, logokit.kit",
+  "needs_tk": false,
+  "apt": [
+    "libxcb-cursor0"
+  ],
+  "macos_min": 11,
+  "categories": "Graphics;",
+  "keywords": "logo;brand;icon;identity;design;favicon;",
+  "wm_class": "digonto-logo",
+  "mime": [
+    "application/x-digonto-logo"
+  ],
+  "replaces": [
+    "digonto-brand"
+  ],
+  "legacy": {
+    "linux": [],
+    "darwin": [],
+    "windows": []
+  },
+  "extensions": [
+    ".dlgo",
+    ".ptlogo"
+  ],
+  "uti": "dev.digonto.logo-project"
+}

@@ -1,0 +1,311 @@
+[
+ {
+  "id": "montserrat",
+  "name": "Montserrat",
+  "cat": "sans",
+  "license": "OFL-1.1",
+  "regular": "montserrat-regular.ttf",
+  "bold": "montserrat-bold.ttf"
+ },
+ {
+  "id": "poppins",
+  "name": "Poppins",
+  "cat": "sans",
+  "license": "OFL-1.1",
+  "regular": "poppins-regular.ttf",
+  "bold": "poppins-bold.ttf"
+ },
+ {
+  "id": "inter",
+  "name": "Inter",
+  "cat": "sans",
+  "license": "OFL-1.1",
+  "regular": "inter-regular.ttf",
+  "bold": "inter-bold.ttf"
+ },
+ {
+  "id": "raleway",
+  "name": "Raleway",
+  "cat": "sans",
+  "license": "OFL-1.1",
+  "regular": "raleway-regular.ttf",
+  "bold": "raleway-bold.ttf"
+ },
+ {
+  "id": "josefin-sans",
+  "name": "Josefin Sans",
+  "cat": "sans",
+  "license": "OFL-1.1",
+  "regular": "josefin-sans-regular.ttf",
+  "bold": "josefin-sans-bold.ttf"
+ },
+ {
+  "id": "nunito",
+  "name": "Nunito",
+  "cat": "sans",
+  "license": "OFL-1.1",
+  "regular": "nunito-regular.ttf",
+  "bold": "nunito-bold.ttf"
+ },
+ {
+  "id": "quicksand",
+  "name": "Quicksand",
+  "cat": "sans",
+  "license": "OFL-1.1",
+  "regular": "quicksand-regular.ttf",
+  "bold": "quicksand-bold.ttf"
+ },
+ {
+  "id": "outfit",
+  "name": "Outfit",
+  "cat": "sans",
+  "license": "OFL-1.1",
+  "regular": "outfit-regular.ttf",
+  "bold": "outfit-bold.ttf"
+ },
+ {
+  "id": "sora",
+  "name": "Sora",
+  "cat": "sans",
+  "license": "OFL-1.1",
+  "regular": "sora-regular.ttf",
+  "bold": "sora-bold.ttf"
+ },
+ {
+  "id": "manrope",
+  "name": "Manrope",
+  "cat": "sans",
+  "license": "OFL-1.1",
+  "regular": "manrope-regular.ttf",
+  "bold": "manrope-bold.ttf"
+ },
+ {
+  "id": "dm-sans",
+  "name": "DM Sans",
+  "cat": "sans",
+  "license": "OFL-1.1",
+  "regular": "dm-sans-regular.ttf",
+  "bold": "dm-sans-bold.ttf"
+ },
+ {
+  "id": "space-grotesk",
+  "name": "Space Grotesk",
+  "cat": "sans",
+  "license": "OFL-1.1",
+  "regular": "space-grotesk-regular.ttf",
+  "bold": "space-grotesk-bold.ttf"
+ },
+ {
+  "id": "work-sans",
+  "name": "Work Sans",
+  "cat": "sans",
+  "license": "OFL-1.1",
+  "regular": "work-sans-regular.ttf",
+  "bold": "work-sans-bold.ttf"
+ },
+ {
+  "id": "rubik",
+  "name": "Rubik",
+  "cat": "sans",
+  "license": "OFL-1.1",
+  "regular": "rubik-regular.ttf",
+  "bold": "rubik-bold.ttf"
+ },
+ {
+  "id": "league-spartan",
+  "name": "League Spartan",
+  "cat": "sans",
+  "license": "OFL-1.1",
+  "regular": "league-spartan-regular.ttf",
+  "bold": "league-spartan-bold.ttf"
+ },
+ {
+  "id": "urbanist",
+  "name": "Urbanist",
+  "cat": "sans",
+  "license": "OFL-1.1",
+  "regular": "urbanist-regular.ttf",
+  "bold": "urbanist-bold.ttf"
+ },
+ {
+  "id": "playfair-display",
+  "name": "Playfair Display",
+  "cat": "serif",
+  "license": "OFL-1.1",
+  "regular": "playfair-display-regular.ttf",
+  "bold": "playfair-display-bold.ttf"
+ },
+ {
+  "id": "cormorant-garamond",
+  "name": "Cormorant Garamond",
+  "cat": "serif",
+  "license": "OFL-1.1",
+  "regular": "cormorant-garamond-regular.ttf",
+  "bold": "cormorant-garamond-bold.ttf"
+ },
+ {
+  "id": "lora",
+  "name": "Lora",
+  "cat": "serif",
+  "license": "OFL-1.1",
+  "regular": "lora-regular.ttf",
+  "bold": "lora-bold.ttf"
+ },
+ {
+  "id": "merriweather",
+  "name": "Merriweather",
+  "cat": "serif",
+  "license": "OFL-1.1",
+  "regular": "merriweather-regular.ttf",
+  "bold": "merriweather-bold.ttf"
+ },
+ {
+  "id": "dm-serif-display",
+  "name": "DM Serif Display",
+  "cat": "serif",
+  "license": "OFL-1.1",
+  "regular": "dm-serif-display-regular.ttf"
+ },
+ {
+  "id": "libre-baskerville",
+  "name": "Libre Baskerville",
+  "cat": "serif",
+  "license": "OFL-1.1",
+  "regular": "libre-baskerville-regular.ttf",
+  "bold": "libre-baskerville-bold.ttf"
+ },
+ {
+  "id": "bitter",
+  "name": "Bitter",
+  "cat": "serif",
+  "license": "OFL-1.1",
+  "regular": "bitter-regular.ttf",
+  "bold": "bitter-bold.ttf"
+ },
+ {
+  "id": "cinzel",
+  "name": "Cinzel",
+  "cat": "serif",
+  "license": "OFL-1.1",
+  "regular": "cinzel-regular.ttf",
+  "bold": "cinzel-bold.ttf"
+ },
+ {
+  "id": "bebas-neue",
+  "name": "Bebas Neue",
+  "cat": "display",
+  "license": "OFL-1.1",
+  "regular": "bebas-neue-regular.ttf"
+ },
+ {
+  "id": "oswald",
+  "name": "Oswald",
+  "cat": "display",
+  "license": "OFL-1.1",
+  "regular": "oswald-regular.ttf",
+  "bold": "oswald-bold.ttf"
+ },
+ {
+  "id": "anton",
+  "name": "Anton",
+  "cat": "display",
+  "license": "OFL-1.1",
+  "regular": "anton-regular.ttf"
+ },
+ {
+  "id": "abril-fatface",
+  "name": "Abril Fatface",
+  "cat": "display",
+  "license": "OFL-1.1",
+  "regular": "abril-fatface-regular.ttf"
+ },
+ {
+  "id": "archivo-black",
+  "name": "Archivo Black",
+  "cat": "display",
+  "license": "OFL-1.1",
+  "regular": "archivo-black-regular.ttf"
+ },
+ {
+  "id": "righteous",
+  "name": "Righteous",
+  "cat": "display",
+  "license": "OFL-1.1",
+  "regular": "righteous-regular.ttf"
+ },
+ {
+  "id": "lobster",
+  "name": "Lobster",
+  "cat": "display",
+  "license": "OFL-1.1",
+  "regular": "lobster-regular.ttf"
+ },
+ {
+  "id": "pacifico",
+  "name": "Pacifico",
+  "cat": "script",
+  "license": "OFL-1.1",
+  "regular": "pacifico-regular.ttf"
+ },
+ {
+  "id": "dancing-script",
+  "name": "Dancing Script",
+  "cat": "script",
+  "license": "OFL-1.1",
+  "regular": "dancing-script-regular.ttf",
+  "bold": "dancing-script-bold.ttf"
+ },
+ {
+  "id": "great-vibes",
+  "name": "Great Vibes",
+  "cat": "script",
+  "license": "OFL-1.1",
+  "regular": "great-vibes-regular.ttf"
+ },
+ {
+  "id": "satisfy",
+  "name": "Satisfy",
+  "cat": "script",
+  "license": "Apache-2.0",
+  "regular": "satisfy-regular.ttf"
+ },
+ {
+  "id": "caveat",
+  "name": "Caveat",
+  "cat": "script",
+  "license": "OFL-1.1",
+  "regular": "caveat-regular.ttf",
+  "bold": "caveat-bold.ttf"
+ },
+ {
+  "id": "sacramento",
+  "name": "Sacramento",
+  "cat": "script",
+  "license": "OFL-1.1",
+  "regular": "sacramento-regular.ttf"
+ },
+ {
+  "id": "roboto-slab",
+  "name": "Roboto Slab",
+  "cat": "slab",
+  "license": "Apache-2.0",
+  "regular": "roboto-slab-regular.ttf",
+  "bold": "roboto-slab-bold.ttf"
+ },
+ {
+  "id": "arvo",
+  "name": "Arvo",
+  "cat": "slab",
+  "license": "OFL-1.1",
+  "regular": "arvo-regular.ttf",
+  "bold": "arvo-bold.ttf"
+ },
+ {
+  "id": "space-mono",
+  "name": "Space Mono",
+  "cat": "mono",
+  "license": "OFL-1.1",
+  "regular": "space-mono-regular.ttf",
+  "bold": "space-mono-bold.ttf"
+ }
+]
