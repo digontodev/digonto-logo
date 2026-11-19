@@ -1359,7 +1359,7 @@ class Main(QMainWindow):
             bl.addWidget(b)
         hd = ui.make_header(APP_NAME, "Make a complete logo and brand in minutes", self.icon, self.about, bar)
         self.rail = ui.Rail(
-            [("new", "new", "New logo (Ctrl+N)", self.new),
+            [("new", "new", "New logo (Ctrl+N)", self.start_new),
              ("open", "open", "Open project (Ctrl+O)", self.open_dialog),
              ("save", "save", "Save project (Ctrl+S)", self.save_project),
              ("export", "export", "Export the logo and brand kit (Ctrl+E)", self.go_export),
@@ -1372,17 +1372,28 @@ class Main(QMainWindow):
         bh.setContentsMargins(0, 0, 0, 0)
         bh.setSpacing(0)
         bh.addWidget(self.rail)
-        bh.addWidget(self.stack, 1)
+        self.start = ui.StartScreen(
+            "Make a complete logo and brand in minutes - ideas, symbols, fonts, colours and a brand kit",
+            [("Create new project", "new", self.start_new, True), ("Open project …", "open", self.open_dialog, False)],
+            "or drop a Digonto Logo project here", lambda: ui.recent_paths(SLUG), self.open_project)
+        self.outer = QStackedWidget()
+        self.outer.addWidget(self.start)
+        self.outer.addWidget(self.stack)
+        bh.addWidget(self.outer, 1)
+        self.steps_bar = bar
+        self.setAcceptDrops(True)
         ui.wrap_with_header(self, hd, body)
         self.goto(0)
         if path and os.path.isfile(path):
             self.open_project(path)
+        else:
+            self.show_start()
 
     def build_menu(self):
         mb = self.menuBar()
         fm = mb.addMenu("File")
         for text, sc, fn in (("New", "Ctrl+N", self.new), ("Open project ...", "Ctrl+O", self.open_dialog), ("Save project", "Ctrl+S", self.save_project),
-                             ("Save project as ...", "Ctrl+Shift+S", lambda: self.save_project(as_new=True)), ("Close project", "Ctrl+W", self.new)):
+                             ("Save project as ...", "Ctrl+Shift+S", lambda: self.save_project(as_new=True)), ("Close project", "Ctrl+W", self.close_project)):
             fm.addAction(QAction(text, self, shortcut=sc, triggered=fn))
         fm.addSeparator()
         fm.addAction(QAction("Export ...", self, shortcut="Ctrl+E", triggered=self.go_export))
@@ -1410,7 +1421,38 @@ class Main(QMainWindow):
         m.exec(b.mapToGlobal(b.rect().topRight()))
 
     # ---- navigation
+    def show_start(self):
+        self.start.refresh()
+        self.outer.setCurrentIndex(0)
+        self.steps_bar.hide()
+        self.rail.set_enabled(["save", "export", "ideas", "customize"], False)
+
+    def start_new(self):
+        self.new()
+        self.goto(0)
+
+    def dragEnterEvent(self, e):
+        if e.mimeData().hasUrls():
+            e.acceptProposedAction()
+            if self.outer.currentIndex() == 0:
+                self.start.set_dropping(True)
+
+    def dragLeaveEvent(self, e):
+        self.start.set_dropping(False)
+
+    def dropEvent(self, e):
+        self.start.set_dropping(False)
+        for u in e.mimeData().urls():
+            p = u.toLocalFile()
+            if p.lower().endswith((".dlgo", ".ptlogo")) and self.maybe_save():
+                self.open_project(p)
+                break
+
     def goto(self, i):
+        if hasattr(self, "outer"):
+            self.outer.setCurrentIndex(1)
+            self.steps_bar.show()
+            self.rail.set_enabled(["save", "export", "ideas", "customize"], True)
         if i >= 2 and not self.editor_ready():
             QMessageBox.information(self, APP_NAME, "Pick an idea first (step 2).")
             i = 1 if self.ideas_all else 0
@@ -1506,6 +1548,13 @@ class Main(QMainWindow):
         self.favs, self.ideas_all, self._editor_loaded = [], [], False
         self.brief_page.set_brief({})
         self.goto(0)
+
+    def close_project(self):
+        if not self.maybe_save():
+            return
+        self.dirty = False
+        self.new()
+        self.show_start()
 
     def open_dialog(self):
         p, _ = QFileDialog.getOpenFileName(self, "Open project", "", "Digonto Logo project (*.dlgo *.ptlogo)")
