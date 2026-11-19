@@ -1358,7 +1358,22 @@ class Main(QMainWindow):
             self.steps.append(b)
             bl.addWidget(b)
         hd = ui.make_header(APP_NAME, "Make a complete logo and brand in minutes", self.icon, self.about, bar)
-        ui.wrap_with_header(self, hd, self.stack)
+        self.rail = ui.Rail(
+            [("new", "new", "New logo (Ctrl+N)", self.new),
+             ("open", "open", "Open project (Ctrl+O)", self.open_dialog),
+             ("save", "save", "Save project (Ctrl+S)", self.save_project),
+             ("export", "export", "Export the logo and brand kit (Ctrl+E)", self.go_export),
+             None,
+             ("ideas", "wand", "Ideas (step 2)", lambda: self.goto(1)),
+             ("customize", "pen", "Customize (step 3)", lambda: self.goto(2))],
+            [("settings", "settings", "Settings and help", self.rail_settings)])
+        body = QWidget()
+        bh = QHBoxLayout(body)
+        bh.setContentsMargins(0, 0, 0, 0)
+        bh.setSpacing(0)
+        bh.addWidget(self.rail)
+        bh.addWidget(self.stack, 1)
+        ui.wrap_with_header(self, hd, body)
         self.goto(0)
         if path and os.path.isfile(path):
             self.open_project(path)
@@ -1384,6 +1399,15 @@ class Main(QMainWindow):
             vm.addAction(QAction(n, self, shortcut=f"Ctrl+{i + 1}", triggered=lambda _=False, i=i: self.goto(i)))
         hm = mb.addMenu("Help")
         hm.addAction(QAction("About Digonto Logo", self, triggered=self.about))
+
+    def rail_settings(self):
+        from PySide6.QtWidgets import QMenu
+        m = QMenu(self)
+        m.addAction("Save project as …", lambda: self.save_project(as_new=True))
+        m.addSeparator()
+        m.addAction("About Digonto Logo", self.about)
+        b = self.rail.button("settings")
+        m.exec(b.mapToGlobal(b.rect().topRight()))
 
     # ---- navigation
     def goto(self, i):
