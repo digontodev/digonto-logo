@@ -5,13 +5,14 @@ import math
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QPainterPath, QTransform
 
-from . import custom, generate, icons, marks, palettes, textkit
+from . import custom, generate, icons, marks, namefx, palettes, textkit
 from .scene import Grad, Scene
 
 LAYOUTS = [("horizontal", "Symbol left"), ("stacked", "Symbol on top"), ("twoline", "Two lines"), ("wordmark", "Wordmark"),
            ("emblem", "Round emblem"), ("stamp", "Stamp"), ("badge", "Name badge"), ("frame", "Framed"), ("symbol", "Symbol only")]
 CMODES = [("solid", "Solid, symbol cut out"), ("duo", "Solid, 2 colors"), ("outline", "Outline"), ("soft", "Soft tint")]
-TWO = [("none", "One color"), ("first", "First word accent"), ("last", "Last word accent"), ("weight", "First word bold")]
+TWO = [("none", "One color"), ("first", "First word accent"), ("last", "Last word accent"), ("weight", "First word bold"),
+       ("weight_last", "Last word bold"), ("light", "First bold, rest light"), ("alt", "Light / bold, word by word"), ("accent_bold", "First word bold + accent")]
 
 DEFAULT = {
     "name": "Your Brand", "tagline": "",
@@ -19,7 +20,8 @@ DEFAULT = {
     "symbol": {"kind": "icon", "icon": "star", "iw": "fill", "mark": "orbit", "letters": "", "container": "none", "cmode": "solid",
                "scale": 1.0, "grad": False, "mstyle": "plain", "astyle": "radial", "avar": 0, "line": "none"},
     "swap": {"on": False, "letter": "", "icon": "", "iw": "fill"},
-    "font": {"id": "montserrat", "bold": True, "case": "upper", "track": 0.04, "two": "none", "size": 1.0},
+    "font": {"id": "montserrat", "bold": True, "case": "upper", "track": 0.04, "two": "none", "size": 1.0,
+             "slant": 0.0, "stretch": 1.0, "bend": 0.0, "nstyle": "solid", "cut": "none", "shadow": "none", "ngrad": False},
     "tfont": {"id": "montserrat", "bold": False, "case": "upper", "track": 0.2, "scale": 1.0, "fit": True},
     "colors": {"primary": "#C2395C", "secondary": "#E0662A", "text": "#0F3D2E", "bg": "#F4FAF7"},
     "name_role": "text", "tag_role": "muted", "gap": 1.0, "divider": False, "deco": "none", "fill": True,
@@ -198,8 +200,18 @@ def name_runs(s, text=None):
             runs.append((w + sp, f["id"], f["bold"], "primary" if i == 0 else base_role))
         elif two == "last":
             runs.append((w + sp, f["id"], f["bold"], "primary" if i == len(words) - 1 else base_role))
+        elif two == "weight":
+            runs.append((w + sp, f["id"], i == 0, base_role))
+        elif two == "weight_last":
+            runs.append((w + sp, f["id"], i == len(words) - 1, base_role))
+        elif two == "light":
+            runs.append((w + sp, f["id"], True if i == 0 else 300, base_role))
+        elif two == "alt":
+            runs.append((w + sp, f["id"], 300 if i % 2 == 0 else True, base_role))
+        elif two == "accent_bold":
+            runs.append((w + sp, f["id"], i == 0, "primary" if i == 0 else base_role))
         else:
-            runs.append((w + sp, f["id"], (i == 0) and True, base_role))
+            runs.append((w + sp, f["id"], f["bold"], base_role))
     return runs
 
 
@@ -263,7 +275,7 @@ def build_name(s, size):
             ink = QRectF()
             for q, _ in runs:
                 ink = ink.united(q.boundingRect()) if not ink.isEmpty() else q.boundingRect()
-    return [(p, color(s, role)) for p, role in runs], ink
+    return namefx.apply(s, [(p, color(s, role)) for p, role in runs], size)
 
 
 def build_tag(s, size, width=None):
@@ -402,14 +414,14 @@ def _twoline(s, sc):
     cap = _cap(s, size)
     r1, i1 = textkit.text_runs(name_runs(s, l1), size, f["track"])
     r2, i2 = textkit.text_runs(name_runs(s, l2), size, f["track"])
-    if f.get("two") in ("first", "last", "weight"):
+    if f.get("two") in ("first", "last"):
         # accent applies per line here: first line / last line
         role1 = "primary" if f["two"] == "first" else s["name_role"]
         role2 = "primary" if f["two"] == "last" else s["name_role"]
         r1 = [(p, role1) for p, _ in r1]
         r2 = [(p, role2) for p, _ in r2]
-    n1 = [(p, color(s, r)) for p, r in r1]
-    n2 = [(p, color(s, r)) for p, r in r2]
+    n1, i1 = namefx.apply(s, [(p, color(s, r)) for p, r in r1], size)
+    n2, i2 = namefx.apply(s, [(p, color(s, r)) for p, r in r2], size)
     items, sw, sh = symbol(s, F * 1.3)
     lead = cap * 1.42
     has_tag = bool(s["tagline"].strip())

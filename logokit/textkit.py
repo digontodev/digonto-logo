@@ -73,11 +73,13 @@ def has_script(font_id, script):
 def qfont(font_id, bold=False, track=0.0):
     f = QFont(family(font_id))
     f.setPixelSize(int(REF))
-    want_bold = bold and has_bold(font_id)
+    weight = bold if type(bold) is int else (700 if bold else 400)       # True/False or a number like 300
+    if weight > 400 and not has_bold(font_id):
+        weight = 400
     if is_variable(font_id) and hasattr(f, "setVariableAxis"):
-        f.setVariableAxis(QFont.Tag("wght"), 700 if want_bold else 400)
+        f.setVariableAxis(QFont.Tag("wght"), weight)
     else:
-        f.setWeight(QFont.Bold if want_bold else QFont.Normal)
+        f.setWeight(QFont.Bold if weight >= 600 else QFont.Normal)
     f.setStyleStrategy(QFont.PreferOutline)
     f.setHintingPreference(QFont.PreferNoHinting)
     if track:

@@ -238,6 +238,23 @@ def one(brief, rng, kind, ctx, i):
         "deco": rng.choice(["none", "bar", "lines", "underline"]) if layout == "wordmark" else "none",
         "style": sk, "kind": kind,
     }
+    fx = spec["font"]
+    if not script and kind in ("wordmark", "swap", "icon", "abstract", "monogram", "mark") and rng.random() < 0.35:
+        pick = rng.choice(["slant", "bend", "cut", "shadow", "nstyle", "ngrad", "stretch"])
+        if pick == "slant":
+            fx["slant"] = float(rng.choice([8, 10, 12]))
+        elif pick == "bend" and layout in ("stacked", "wordmark"):
+            fx["bend"] = rng.choice([0.25, 0.32, -0.25])
+        elif pick == "cut" and bold:
+            fx["cut"] = rng.choice(["stripe", "slash", "lines", "half"])
+        elif pick == "shadow":
+            fx["shadow"] = rng.choice(["drop", "long", "3d"])
+        elif pick == "nstyle" and bold:
+            fx["nstyle"] = rng.choice(["outline", "double", "inline"])
+        elif pick == "ngrad":
+            fx["ngrad"] = True
+        elif pick == "stretch":
+            fx["stretch"] = rng.choice([0.82, 1.18])
     if kind == "swap":                              # a letter of the name becomes the icon
         pl = ctx["pool"]
         spec["swap"] = {"on": True, "letter": "", "icon": pl[min(int(rng.random() ** 2.0 * len(pl) * 0.4), len(pl) - 1)], "iw": "fill"}
@@ -250,7 +267,8 @@ def one(brief, rng, kind, ctx, i):
 
 def signature(s):
     sy = s["symbol"]
-    return (s["layout"], sy.get("icon") or sy.get("mark") or sy.get("mstyle") or sy.get("astyle") or sy["kind"], s["font"]["id"], s["palette"], sy.get("container"))
+    return (s["layout"], sy.get("icon") or sy.get("mark") or sy.get("mstyle") or sy.get("astyle") or sy["kind"], s["font"]["id"], s["palette"], sy.get("container"),
+            s["font"].get("slant"), s["font"].get("bend"), s["font"].get("cut"), s["font"].get("shadow"))
 
 
 def generate(brief, n=18, seed=0):

@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (QStyle, QStyledItemDelegate, QApplication, QButto
 
 import digonto_ui as ui
 from logokit import __version__ as VERSION
-from logokit import compose, custom, export, generate, icons, ideas, kit, marks, palettes, textkit
+from logokit import compose, custom, export, generate, icons, namefx, ideas, kit, marks, palettes, textkit
 from logokit.scene import paint
 
 APP_NAME = "Digonto Logo"
@@ -1012,6 +1012,25 @@ class Editor(QWidget):
         v.addLayout(self.row("Letter space", self.s_track))
         self.s_nsize = self.slider(50, 160, lambda x: self.set("font", "size", value=x / 100, group="nsize"), "nsize")
         v.addLayout(self.row("Name size", self.s_nsize))
+        v.addWidget(heading("Name design"))
+        self.s_slant = self.slider(-20, 20, lambda x: self.set("font", "slant", value=float(x), group="slant"), "slant")
+        v.addLayout(self.row("Slant", self.s_slant))
+        self.s_stretch = self.slider(60, 150, lambda x: self.set("font", "stretch", value=x / 100, group="stretch"), "stretch")
+        v.addLayout(self.row("Width", self.s_stretch))
+        self.s_bend = self.slider(-100, 100, lambda x: self.set("font", "bend", value=x / 100, group="bend"), "bend")
+        v.addLayout(self.row("Curve", self.s_bend))
+        self.c_nstyle = self.combo(namefx.STYLES, lambda k: self.set("font", "nstyle", value=k))
+        v.addLayout(self.row("Letters", self.c_nstyle))
+        self.c_cut = self.combo(namefx.CUTS, lambda k: self.set("font", "cut", value=k))
+        v.addLayout(self.row("Cut", self.c_cut))
+        self.c_shadow = self.combo(namefx.SHADOWS, lambda k: self.set("font", "shadow", value=k))
+        v.addLayout(self.row("Shadow", self.c_shadow))
+        self.k_ngrad = QCheckBox("Gradient from main to second color")
+        self.k_ngrad.toggled.connect(lambda b: self.set("font", "ngrad", value=b))
+        v.addWidget(self.k_ngrad)
+        reset = QPushButton("Reset name design")
+        reset.clicked.connect(self.reset_namefx)
+        v.addWidget(reset)
         v.addWidget(heading("Tagline font"))
         self.c_tf = QComboBox()
         for f in textkit.FONTS:
@@ -1034,6 +1053,12 @@ class Editor(QWidget):
         v.addWidget(lic)
         v.addStretch(1)
         self.fill_fonts()
+
+    def reset_namefx(self):
+        self.push("namefx-reset")
+        self.spec["font"].update(slant=0.0, stretch=1.0, bend=0.0, nstyle="solid", cut="none", shadow="none", ngrad=False)
+        self.sync()
+        self.schedule()
 
     def fill_fonts(self):
         cat = self.c_cat.currentData()
@@ -1231,6 +1256,13 @@ class Editor(QWidget):
             self.k_bold.setChecked(bool(s["font"]["bold"]))
             self.k_bold.setEnabled(textkit.has_bold(s["font"]["id"]))
             self.s_track.setValue(int(s["font"]["track"] * 100))
+            f = s["font"]
+            self.s_slant.setValue(int(round(f.get("slant", 0))))
+            self.s_stretch.setValue(int(round(f.get("stretch", 1.0) * 100)))
+            self.s_bend.setValue(int(round(f.get("bend", 0) * 100)))
+            for c, key, d in ((self.c_nstyle, "nstyle", "solid"), (self.c_cut, "cut", "none"), (self.c_shadow, "shadow", "none")):
+                c.setCurrentIndex(max(0, c.findData(f.get(key, d))))
+            self.k_ngrad.setChecked(bool(f.get("ngrad")))
             self.s_nsize.setValue(int(s["font"].get("size", 1.0) * 100))
             i = self.c_tf.findData(s["tfont"]["id"])
             self.c_tf.setCurrentIndex(max(0, i))
