@@ -4,6 +4,7 @@ import re
 import copy
 
 from . import compose, icons, marks, palettes, textkit
+from . import generate as gen
 
 INDUSTRIES = {
     "food": {"label": "Restaurant, cafe, food", "tags": "food warm",
@@ -159,8 +160,10 @@ def colors_of(pal, dark=False):
     return {"primary": pal["primary"], "secondary": pal["secondary"], "text": pal["text"], "bg": pal["bg"]}
 
 
-KINDS = ["icon", "badge", "mark", "split", "monogram", "frame", "wordmark", "icon", "emblem", "badge", "icon", "split", "mark", "monogram", "wordmark",
-         "stamp", "frame", "icon", "emblem", "badge", "mark", "split", "icon", "wordmark", "monogram", "stamp", "icon", "frame", "mark", "split"]
+KINDS = ["icon", "badge", "abstract", "split", "monogram", "frame", "wordmark", "icon", "emblem", "swap", "icon", "split", "mark", "monogram", "abstract",
+         "stamp", "frame", "icon", "emblem", "badge", "mark", "swap", "icon", "wordmark", "monogram", "stamp", "abstract", "frame", "mark", "split"]
+MONO_PICK = ["plain", "overlap", "interlock", "linked", "stacked", "cutout", "shield", "outline", "inline", "stripe", "shadow", "split", "diamond", "ribbon"]
+FREE_MONO = {"stacked", "cutout", "shield", "diamond", "ribbon", "overlap", "shadow", "split"}   # look good without a container
 
 
 def one(brief, rng, kind, ctx, i):
@@ -191,7 +194,8 @@ def one(brief, rng, kind, ctx, i):
         case, script, bold, track = "upper", False, False, rng.choice([0.1, 0.16])
     layout = {"icon": rng.choice(["horizontal", "stacked", "horizontal", "twoline" if nw >= 2 else "stacked"]),
               "mark": rng.choice(["horizontal", "stacked", "twoline" if nw >= 2 else "horizontal"]),
-              "monogram": rng.choice(["horizontal", "stacked"]), "wordmark": "wordmark", "emblem": "emblem", "stamp": "stamp", "badge": "badge",
+              "monogram": rng.choice(["horizontal", "stacked"]), "abstract": rng.choice(["horizontal", "stacked", "horizontal"]),
+              "swap": "wordmark", "wordmark": "wordmark", "emblem": "emblem", "stamp": "stamp", "badge": "badge",
               "frame": "frame", "split": rng.choice(["horizontal", "stacked", "horizontal"])}[kind]
     if len(name) > 20 and kind in ("emblem",):
         layout = "stacked"
@@ -202,10 +206,14 @@ def one(brief, rng, kind, ctx, i):
     elif kind == "mark":
         sym.update(kind="mark", mark=rng.choice(list(marks.MARKS)))
     elif kind == "monogram":
-        sym.update(kind="monogram")
+        sym.update(kind="monogram", mstyle=rng.choice(MONO_PICK))
+    elif kind == "abstract":
+        sym.update(kind="abstract", astyle=rng.choice([k for k, _ in gen.ABSTRACT_STYLES]), avar=rng.randint(0, 3))
+    if kind in ("icon", "mark") and rng.random() < 0.15:
+        sym["line"] = rng.choice(["line", "double"])
     if sym["kind"] != "none":
         if kind == "monogram":
-            sym["container"] = rng.choice([c for c in st["conts"] if c != "none"] or ["rounded"])
+            sym["container"] = "none" if sym["mstyle"] in FREE_MONO else rng.choice([c for c in st["conts"] if c != "none"] or ["rounded"])
         elif kind == "icon" and layout != "symbol":
             sym["container"] = rng.choice(st["conts"])
         elif kind == "mark" and rng.random() < 0.25:
@@ -230,6 +238,11 @@ def one(brief, rng, kind, ctx, i):
         "deco": rng.choice(["none", "bar", "lines", "underline"]) if layout == "wordmark" else "none",
         "style": sk, "kind": kind,
     }
+    if kind == "swap":                              # a letter of the name becomes the icon
+        pl = ctx["pool"]
+        spec["swap"] = {"on": True, "letter": "", "icon": pl[min(int(rng.random() ** 2.0 * len(pl) * 0.4), len(pl) - 1)], "iw": "fill"}
+        spec["font"]["case"] = spec["font"]["case"] or "upper"
+        spec["deco"] = "none"
     if kind == "monogram" and spec["tagline"] == "" and layout == "stacked":
         pass
     return spec
@@ -237,7 +250,7 @@ def one(brief, rng, kind, ctx, i):
 
 def signature(s):
     sy = s["symbol"]
-    return (s["layout"], sy.get("icon") or sy.get("mark") or sy["kind"], s["font"]["id"], s["palette"], sy.get("container"))
+    return (s["layout"], sy.get("icon") or sy.get("mark") or sy.get("mstyle") or sy.get("astyle") or sy["kind"], s["font"]["id"], s["palette"], sy.get("container"))
 
 
 def generate(brief, n=18, seed=0):

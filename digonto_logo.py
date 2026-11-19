@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (QStyle, QStyledItemDelegate, QApplication, QButto
 
 import digonto_ui as ui
 from logokit import __version__ as VERSION
-from logokit import compose, custom, export, icons, ideas, kit, marks, palettes, textkit
+from logokit import compose, custom, export, generate, icons, ideas, kit, marks, palettes, textkit
 from logokit.scene import paint
 
 APP_NAME = "Digonto Logo"
@@ -72,10 +72,10 @@ def heading(t):
     return l
 
 
-def chips(options, current, on_change, multi=False, parent=None):
-    """row of toggle buttons. options = [(key, label)]. Returns (widget, group dict key->button)"""
+def chips(options, current, on_change, multi=False, parent=None, cols=0):
+    """row of toggle buttons (or a grid with `cols` columns). options = [(key, label)]. Returns (widget, group dict key->button)"""
     w = QWidget(parent)
-    lay = QHBoxLayout(w)
+    lay = QGridLayout(w) if cols else QHBoxLayout(w)
     lay.setContentsMargins(0, 0, 0, 0)
     lay.setSpacing(6)
     btns = {}
@@ -87,10 +87,14 @@ def chips(options, current, on_change, multi=False, parent=None):
         b.setChecked(k == current if not multi else k in (current or []))
         b.setStyleSheet("QPushButton{padding:5px 11px; border-radius:15px;} QPushButton:checked{background:qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #FF6F8E, stop:1 #FFB05A); color:#2A1241; border-color:#FF6F8E;}")
         grp.addButton(b)
+        if cols:
+            lay.addWidget(b, len(btns) // cols, len(btns) % cols)
+        else:
+            lay.addWidget(b)
         btns[k] = b
-        lay.addWidget(b)
         b.clicked.connect(lambda _=False, k=k: on_change(k))
-    lay.addStretch()
+    if not cols:
+        lay.addStretch()
     return w, btns
 
 
@@ -422,7 +426,7 @@ class BriefPage(QWidget):
 
 
 class IdeasPage(QWidget):
-    FILTERS = [("all", "All"), ("icon", "Symbol"), ("split", "Two-tone"), ("mark", "Shapes"), ("monogram", "Initials"), ("wordmark", "Wordmark"),
+    FILTERS = [("all", "All"), ("icon", "Symbol"), ("split", "Two-tone"), ("mark", "Shapes"), ("monogram", "Initials"), ("abstract", "From name"), ("swap", "Icon in name"), ("wordmark", "Wordmark"),
                ("badge", "Badge"), ("frame", "Framed"), ("emblem", "Emblem"), ("stamp", "Stamp"), ("fav", "\u2665 Favorites")]
 
     def __init__(self, win):
@@ -572,7 +576,7 @@ class Editor(QWidget):
         self.push(group or ".".join(map(str, path)))
         d = self.spec
         for k in path[:-1]:
-            d = d[k]
+            d = d.setdefault(k, {})
         d[path[-1]] = value
         self.schedule()
 
@@ -641,7 +645,7 @@ class Editor(QWidget):
     def build_symbol_tab(self):
         v = self.scroll_tab("Symbol")
         v.addWidget(heading("Kind"))
-        w, self.kind_btns = chips([("icon", "Icon"), ("mark", "Shape"), ("monogram", "Initials"), ("custom", "My own"), ("none", "None")], "icon", lambda k: self.set("symbol", "kind", value=k))
+        w, self.kind_btns = chips([("icon", "Icon"), ("mark", "Shape"), ("monogram", "Initials"), ("abstract", "From the name"), ("custom", "My own"), ("none", "None")], "icon", self.set_kind, cols=3)
         v.addWidget(w)
         self.sym_stack = QStackedWidget()
         # icons
@@ -725,7 +729,10 @@ class Editor(QWidget):
         self.e_letters.setPlaceholderText("empty = first letters of the name")
         self.e_letters.textChanged.connect(lambda t: self.set("symbol", "letters", value=t, group="letters"))
         gl.addLayout(self.row("Letters", self.e_letters))
-        gl.addWidget(QLabel("Initials use the bold name font."))
+        self.g_list = self.preview_grid(64)
+        self.g_list.itemClicked.connect(lambda it: self.set("symbol", "mstyle", value=it.data(Qt.UserRole), group="ms") or self.set_kind("monogram", group="ms"))
+        gl.addWidget(self.g_list)
+        gl.addWidget(QLabel(f"{len(generate.MONO_STYLES)} initial styles, drawn with your name font."))
         gl.addStretch(1)
         self.sym_stack.addWidget(gw)
         cw = QWidget()
@@ -757,7 +764,35 @@ class Editor(QWidget):
         cl.addStretch(1)
         self.sym_stack.addWidget(cw)
         self.sym_stack.addWidget(QWidget())
+        # abstract marks made from the name (stack index 5)
+        aw = QWidget()
+        al = QVBoxLayout(aw)
+        al.setContentsMargins(0, 6, 0, 0)
+        self.a_list = self.preview_grid(64)
+        self.a_list.itemClicked.connect(lambda it: self.set("symbol", "astyle", value=it.data(Qt.UserRole), group="as") or self.set_kind("abstract", group="as"))
+        al.addWidget(self.a_list)
+        more = QPushButton("↻  Another version")
+        more.clicked.connect(lambda: self.set("symbol", "avar", value=int(self.spec["symbol"].get("avar", 0)) + 1))
+        al.addWidget(more)
+        an = QLabel("These marks grow from the letters of your name: your name always makes the same marks, "
+                    "another name makes other ones. Press 'Another version' for new ones.")
+        an.setWordWrap(True)
+        an.setStyleSheet("color:#6E6475; font-size:11px;")
+        al.addWidget(an)
+        al.addStretch(1)
+        self.sym_stack.addWidget(aw)
         v.addWidget(self.sym_stack)
+        v.addWidget(heading("Drawing"))
+        self.c_line = self.combo(generate.LINE_MODES, lambda k: self.set("symbol", "line", value=k))
+        v.addLayout(self.row("Lines", self.c_line))
+        self.k_swap = QCheckBox("Put the icon (from the Icon page) into the name")
+        self.k_swap.toggled.connect(lambda b: self.set("swap", "on", value=b))
+        v.addWidget(self.k_swap)
+        self.e_swap = QLineEdit()
+        self.e_swap.setMaxLength(1)
+        self.e_swap.setPlaceholderText("empty = first O, A or E")
+        self.e_swap.textChanged.connect(lambda t: self.set("swap", "letter", value=t, group="swapl"))
+        v.addLayout(self.row("Letter", self.e_swap))
         v.addWidget(heading("Container"))
         self.c_cont = self.combo([("none", "None")] + [(c, c.capitalize()) for c in marks.CONTAINERS], lambda k: self.set("symbol", "container", value=k))
         v.addLayout(self.row("Shape", self.c_cont))
@@ -772,6 +807,61 @@ class Editor(QWidget):
         self.k_split.toggled.connect(lambda b: self.set("symbol", "split", value=b))
         v.addWidget(self.k_split)
         v.addStretch(1)
+
+    KIND_PAGE = {"icon": 0, "mark": 1, "monogram": 2, "custom": 3, "none": 4, "abstract": 5}
+
+    def set_kind(self, k, group=None):
+        self.set("symbol", "kind", value=k, group=group)
+        for key, b in self.kind_btns.items():
+            b.setChecked(key == k)
+        self.sym_stack.setCurrentIndex(self.KIND_PAGE.get(k, 4))
+
+    def preview_grid(self, px):
+        g = QListWidget()
+        g.setViewMode(QListWidget.IconMode)
+        g.setIconSize(QSize(px, px))
+        g.setGridSize(QSize(px + 22, px + 22))
+        g.setResizeMode(QListWidget.Adjust)
+        g.setMovement(QListWidget.Static)
+        g.setUniformItemSizes(True)
+        g.setMinimumHeight(260)
+        return g
+
+    def fill_generated(self):
+        """refresh the initials and name-mark previews when the name, letters, font or version changed"""
+        s = self.spec
+        sy = s["symbol"]
+        key = (s["name"], sy.get("letters", ""), s["font"]["id"], sy.get("avar", 0), s["colors"]["primary"], s["colors"]["secondary"])
+        if getattr(self, "_gen_key", None) == key:
+            return
+        self._gen_key = key
+        col = {"a": QColor(s["colors"]["primary"]), "b": QColor(s["colors"]["secondary"]), "c": QColor(palettes.shade(s["colors"]["primary"], -0.35))}
+
+        def item(parts, key, tip, px=64):
+            def draw(p, size, parts=parts):
+                u = QPainterPath()
+                for q, _ in parts:
+                    u.addPath(q)
+                r = u.boundingRect()
+                if r.isEmpty():
+                    return
+                k = (size * 0.9) / max(r.width(), r.height())
+                p.translate(size / 2, size / 2)
+                p.scale(k, k)
+                p.translate(-r.center().x(), -r.center().y())
+                for q, role in parts:
+                    p.fillPath(q, col.get(role, col["a"]))
+            it = QListWidgetItem(glyph_icon(draw, px), "")
+            it.setData(Qt.UserRole, key)
+            it.setToolTip(tip)
+            return it
+        letters = (sy.get("letters") or compose.initials(s["name"])).strip() or "?"
+        self.g_list.clear()
+        for k, label in generate.MONO_STYLES:
+            self.g_list.addItem(item(generate.monogram(letters, s["font"]["id"], k), k, label))
+        self.a_list.clear()
+        for k, label in generate.ABSTRACT_STYLES:
+            self.a_list.addItem(item(generate.abstract(s["name"], k, int(sy.get("avar", 0)), s["font"]["id"]), k, label))
 
     def fill_icons(self):
         q = self.i_search.text().strip()
@@ -1113,7 +1203,7 @@ class Editor(QWidget):
                 c.setCurrentIndex(max(0, i))
             for k, b in self.kind_btns.items():
                 b.setChecked(k == s["symbol"]["kind"])
-            self.sym_stack.setCurrentIndex({"icon": 0, "mark": 1, "monogram": 2, "custom": 3, "none": 4}.get(s["symbol"]["kind"], 4))
+            self.sym_stack.setCurrentIndex(self.KIND_PAGE.get(s["symbol"]["kind"], 4))
             cu = s["symbol"].get("custom") or {}
             self.l_custom.setText((cu.get("name") or "Nothing chosen yet.") + (f"  ({len(cu.get('parts', []))} shapes)" if cu.get("parts") else ""))
             self.k_keep.setChecked(bool(s["symbol"].get("keep")))
@@ -1124,6 +1214,14 @@ class Editor(QWidget):
             self.s_thr.setValue(int(cu.get("threshold", 0.5) * 100))
             self.k_split.setChecked(bool(s["symbol"].get("split")))
             self.e_letters.setText(s["symbol"].get("letters", ""))
+            self.c_line.setCurrentIndex(max(0, self.c_line.findData(s["symbol"].get("line", "none"))))
+            sw = s.get("swap") or {}
+            self.k_swap.setChecked(bool(sw.get("on")))
+            self.e_swap.setText(sw.get("letter", ""))
+            self.fill_generated()
+            for lst, key in ((self.g_list, s["symbol"].get("mstyle", "plain")), (self.a_list, s["symbol"].get("astyle", "radial"))):
+                for i in range(lst.count()):
+                    lst.item(i).setSelected(lst.item(i).data(Qt.UserRole) == key)
             self.s_size.setValue(int(s["symbol"]["scale"] * 100))
             self.k_grad.setChecked(bool(s["symbol"]["grad"]))
             self.s_gap.setValue(int(s["gap"] * 100))
