@@ -109,16 +109,16 @@ def icon_pool(brief, inds):
     nw = words(brief.get("name", ""))
     for w in nw:                                   # words from the business name first
         w2 = WORDS.get(w, w)
-        cand = [n for n in icons.search(w2, 40) if w2 in n.split("-") and not (set(n.split("-")) & NOISE)]
-        cand.sort(key=lambda n: (n != w2, len(n)))
-        for n in cand[:2]:
+        cand = [n for n in icons.search(w2, 60) if w2 in icons.base(n).split("-") and not (set(icons.base(n).split("-")) & NOISE)]
+        cand.sort(key=lambda n: (icons.base(n) != w2, ":" in n, len(n)))
+        for n in cand[:3]:
             push(n)
     for w in words(brief.get("desc", "")) + words(brief.get("tagline", "")):
         w2 = WORDS.get(w, w)
         if len(w2) > 3:
-            cand = [n for n in icons.search(w2, 40) if w2 in n.split("-") and not (set(n.split("-")) & NOISE)]
-            cand.sort(key=lambda n: (n != w2, len(n)))
-            for n in cand[:2]:
+            cand = [n for n in icons.search(w2, 60) if w2 in icons.base(n).split("-") and not (set(icons.base(n).split("-")) & NOISE)]
+            cand.sort(key=lambda n: (icons.base(n) != w2, ":" in n, len(n)))
+            for n in cand[:3]:
                 push(n)
     for k in inds:
         for n in INDUSTRIES[k]["icons"].split():

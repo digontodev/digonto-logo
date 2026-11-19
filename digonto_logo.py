@@ -649,7 +649,7 @@ class Editor(QWidget):
         il = QVBoxLayout(iw)
         il.setContentsMargins(0, 6, 0, 0)
         self.i_search = QLineEdit()
-        self.i_search.setPlaceholderText("Search 1,494 icons: pizza, coffee, heart, rocket ...")
+        self.i_search.setPlaceholderText(f"Search {icons.count():,} icons: pizza, coffee, heart, rocket ...")
         self.i_search.textChanged.connect(lambda _: self.fill_icons())
         il.addWidget(self.i_search)
         self.i_list = QListWidget()
@@ -662,9 +662,13 @@ class Editor(QWidget):
         self.i_list.setMinimumHeight(250)
         self.i_list.itemClicked.connect(lambda it: self.set("symbol", "icon", value=it.data(Qt.UserRole), group="icon") or self.set("symbol", "kind", value="icon", group="icon"))
         il.addWidget(self.i_list)
-        self.c_iw = self.combo([("fill", "Solid"), ("bold", "Outline")], lambda k: self.set("symbol", "iw", value=k))
+        self.c_iw = self.combo(icons.WEIGHTS, lambda k: (self.set("symbol", "iw", value=k), self.fill_icons()))
         il.addLayout(self.row("Style", self.c_iw))
-        lic = QLabel("Icons: Phosphor Icons (MIT licence). Free for commercial use.")
+        self.c_iset = self.combo([("all", "All icon sets")] + icons.SETS, lambda k: self.fill_icons())
+        il.addLayout(self.row("Icon set", self.c_iset))
+        lic = QLabel(f"{icons.count():,} icons: Phosphor, Tabler, Lucide, Material Symbols, Iconoir, Heroicons, Bootstrap "
+                     "(MIT / ISC / Apache 2.0). Free for commercial use.")
+        lic.setWordWrap(True)
         lic.setStyleSheet("color:#6E6475; font-size:11px;")
         il.addWidget(lic)
         self.sym_stack.addWidget(iw)
@@ -771,10 +775,15 @@ class Editor(QWidget):
 
     def fill_icons(self):
         q = self.i_search.text().strip()
-        names = icons.search(q, 150) if q else (self.win.suggested_icons() or icons.search("", 150))
+        iset = self.c_iset.currentData() if hasattr(self, "c_iset") else "all"
+        if q or iset not in ("all", None):
+            names = icons.search(q, 300, iset)
+        else:
+            names = self.win.suggested_icons() or icons.search("", 300)
+        self.i_list.setUpdatesEnabled(False)
         self.i_list.clear()
         col = self.spec["colors"]["primary"]
-        for n in names[:150]:
+        for n in names[:300]:
             def draw(p, size, n=n):
                 path = icons.path(n, self.spec["symbol"].get("iw", "fill"))
                 r = path.boundingRect()
@@ -785,8 +794,9 @@ class Editor(QWidget):
                 p.fillPath(path, QColor("#1A2B23"))
             it = QListWidgetItem(glyph_icon(draw, 44), "")
             it.setData(Qt.UserRole, n)
-            it.setToolTip(n.replace("-", " "))
+            it.setToolTip(f"{icons.base(n).replace('-', ' ').replace('_', ' ')}  ({dict(icons.SETS).get(icons.set_of(n), '')})")
             self.i_list.addItem(it)
+        self.i_list.setUpdatesEnabled(True)
 
     # ---- tab: layout
     def build_layout_tab(self):
