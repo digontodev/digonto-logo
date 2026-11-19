@@ -10,7 +10,7 @@ sys.path.insert(0, HERE)
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QColor, QFont, QIcon, QImage, QKeySequence, QPainter, QPainterPath, QPen, QPixmap
-from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QColorDialog, QComboBox, QFileDialog, QFrame, QGridLayout,
+from PySide6.QtWidgets import (QStyle, QStyledItemDelegate, QApplication, QButtonGroup, QCheckBox, QColorDialog, QComboBox, QFileDialog, QFrame, QGridLayout,
                                QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
                                QPlainTextEdit, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSlider, QSpinBox,
                                QStackedWidget, QTabWidget, QVBoxLayout, QWidget)
@@ -146,6 +146,21 @@ class LogoView(QWidget):
         p.setClipping(False)
         p.setPen(QPen(QColor("#DDD3E9"), 1))
         p.drawRoundedRect(r, self.radius, self.radius)
+
+
+class FontPreviewDelegate(QStyledItemDelegate):
+    """the font list: each name is drawn in its own font, loaded only when it becomes visible"""
+    def sizeHint(self, opt, idx):
+        return QSize(200, 34)
+
+    def paint(self, p, opt, idx):
+        self.initStyleOption(opt, idx)
+        fid = idx.data(Qt.UserRole)
+        if fid:
+            ft = QFont(textkit.family(fid))
+            ft.setPixelSize(19)
+            opt.font = ft
+        QApplication.style().drawControl(QStyle.CE_ItemViewItem, opt, p, opt.widget)
 
 
 class Card(LogoView):
@@ -875,10 +890,19 @@ class Editor(QWidget):
     def build_type_tab(self):
         v = self.scroll_tab("Fonts")
         v.addWidget(heading("Name font"))
-        self.c_cat = self.combo([("all", "All fonts")] + textkit.CATS, lambda k: self.fill_fonts())
-        v.addLayout(self.row("Group", self.c_cat))
+        self.f_search = QLineEdit()
+        self.f_search.setPlaceholderText(f"Search {len(textkit.FONTS)} fonts")
+        self.f_search.setClearButtonEnabled(True)
+        self.f_search.textChanged.connect(lambda _: self.fill_fonts())
+        v.addWidget(self.f_search)
+        self.c_cat = self.combo([("all", "All styles")] + textkit.CATS, lambda k: self.fill_fonts())
+        v.addLayout(self.row("Style", self.c_cat))
+        self.c_script = self.combo([("all", "All languages")] + textkit.SCRIPTS, lambda k: self.fill_fonts())
+        v.addLayout(self.row("Language", self.c_script))
         self.f_list = QListWidget()
-        self.f_list.setMinimumHeight(250)
+        self.f_list.setMinimumHeight(300)
+        self.f_list.setUniformItemSizes(True)
+        self.f_list.setItemDelegate(FontPreviewDelegate(self.f_list))   # each font loads when it scrolls into view
         self.f_list.itemClicked.connect(self.pick_font)
         v.addWidget(self.f_list)
         self.k_bold = QCheckBox("Bold")
@@ -904,7 +928,8 @@ class Editor(QWidget):
         self.k_fit = QCheckBox("Stretch tagline to the width of the name")
         self.k_fit.toggled.connect(lambda b: self.set("tfont", "fit", value=b))
         v.addWidget(self.k_fit)
-        lic = QLabel("All fonts are open source (SIL Open Font License): free for any use.")
+        lic = QLabel(f"{len(textkit.FONTS)} open-source fonts (SIL Open Font License / Apache 2.0): free for any use, also commercial.")
+        lic.setWordWrap(True)
         lic.setStyleSheet("color:#6E6475; font-size:11px;")
         v.addWidget(lic)
         v.addStretch(1)
@@ -912,17 +937,24 @@ class Editor(QWidget):
 
     def fill_fonts(self):
         cat = self.c_cat.currentData()
+        script = self.c_script.currentData() if hasattr(self, "c_script") else "all"
+        q = self.f_search.text().strip().lower() if hasattr(self, "f_search") else ""
+        sample = dict(textkit.SCRIPTS).get(script, "").split("  ")[0] if script not in ("all", "latin", None) else ""
+        self.f_list.setUpdatesEnabled(False)
         self.f_list.clear()
         for f in textkit.FONTS:
-            if cat in ("all", None) or f["cat"] == cat:
-                it = QListWidgetItem(f["name"])
-                it.setData(Qt.UserRole, f["id"])
-                ft = QFont(textkit.family(f["id"]))
-                ft.setPixelSize(19)
-                it.setFont(ft)
-                self.f_list.addItem(it)
-                if f["id"] == self.spec["font"]["id"]:
-                    self.f_list.setCurrentItem(it)
+            if cat not in ("all", None) and f["cat"] != cat:
+                continue
+            if script not in ("all", None) and script not in f.get("scripts", ["latin"]):
+                continue
+            if q and q not in f["name"].lower():
+                continue
+            it = QListWidgetItem(f["name"] + (f"   {sample}" if sample else ""))
+            it.setData(Qt.UserRole, f["id"])
+            self.f_list.addItem(it)
+            if f["id"] == self.spec["font"]["id"]:
+                self.f_list.setCurrentItem(it)
+        self.f_list.setUpdatesEnabled(True)
 
     def pick_font(self, it):
         fid = it.data(Qt.UserRole)

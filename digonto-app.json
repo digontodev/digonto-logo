@@ -1,7 +1,7 @@
 {
   "slug": "digonto-logo",
   "name": "Digonto Logo",
-  "version": "1.2.6",
+  "version": "1.3.0",
   "comment": "Make a complete logo and brand: ideas, customizing, SVG/PNG/PDF/EPS/AI, favicon, social images and a brand guide",
   "entry": "digonto_logo.py",
   "files": [

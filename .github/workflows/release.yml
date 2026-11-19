@@ -47,6 +47,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: if (-not (Get-Command iscc -ErrorAction SilentlyContinue) -and -not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+      - name: Fonts for Digonto Logo (the Google Fonts collection, pinned in logokit/data/fonts.json)
+        shell: bash
+        run: |
+          if [ -f src/digonto-logo/logokit/fetch_fonts.py ]; then python src/digonto-logo/logokit/fetch_fonts.py; fi
       - name: Build
         shell: bash
         run: python src/digonto-logo/packaging/build.py --root src --apps digonto-logo --out dist
