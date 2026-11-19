@@ -8,36 +8,78 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QFont, QFontDatabase, QFontMetricsF, QPainterPath, QTransform
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DATA = os.path.join(HERE, "data", "fonts")
+DATA = os.path.join(HERE, "data", "fonts")      # the 40 fonts that are part of the repository (fallback)
+GF = os.path.join(HERE, "data", "gf")           # the Google Fonts collection, fetched by the build (fetch_fonts.py)
 with open(os.path.join(HERE, "data", "fonts.json"), encoding="utf-8") as _f:
-    FONTS = json.load(_f)
-BY_ID = {f["id"]: f for f in FONTS}
+    _DOC = json.load(_f)
+_ALL = _DOC["fonts"] if isinstance(_DOC, dict) else _DOC
 CATS = [("sans", "Sans-serif"), ("serif", "Serif"), ("display", "Display"), ("script", "Script"), ("slab", "Slab"), ("mono", "Mono")]
-_FAM = {}
+SCRIPTS = [("latin", "Latin"), ("bengali", "বাংলা  Bengali"), ("arabic", "Arabic"), ("devanagari", "Devanagari"),
+           ("cyrillic", "Cyrillic"), ("greek", "Greek"), ("hebrew", "Hebrew"), ("thai", "Thai"), ("tamil", "Tamil"),
+           ("telugu", "Telugu"), ("gujarati", "Gujarati"), ("gurmukhi", "Gurmukhi"), ("kannada", "Kannada"),
+           ("malayalam", "Malayalam"), ("sinhala", "Sinhala"), ("khmer", "Khmer"), ("ethiopic", "Ethiopic"),
+           ("armenian", "Armenian"), ("georgian", "Georgian"), ("japanese", "Japanese"), ("korean", "Korean"),
+           ("chinese-simplified", "Chinese (simplified)"), ("chinese-traditional", "Chinese (traditional)")]
 REF = 100.0                                      # outlines are made at 100 px, then scaled
 
 
+def _files(f):
+    """{'var': path} or {'regular': path, 'bold': path} - the files that are really there"""
+    g = f.get("gf") or {}
+    d = os.path.join(GF, os.path.basename(g.get("dir", "")))
+    out = {}
+    if g.get("var") and os.path.isfile(os.path.join(d, g["var"])):
+        return {"var": os.path.join(d, g["var"])}
+    for k in ("regular", "bold"):
+        if g.get(k) and os.path.isfile(os.path.join(d, g[k])):
+            out[k] = os.path.join(d, g[k])
+    if "regular" not in out:                     # fallback: the files that are part of the repository
+        out = {k: os.path.join(DATA, f[k]) for k in ("regular", "bold") if f.get(k) and os.path.isfile(os.path.join(DATA, f[k]))}
+    return out
+
+
+FILES = {f["id"]: _files(f) for f in _ALL}
+FONTS = [f for f in _ALL if FILES[f["id"]]]      # only the fonts that are installed
+BY_ID = {f["id"]: f for f in FONTS}
+_FAM = {}
+
+
 def family(font_id):
-    f = BY_ID.get(font_id) or BY_ID["montserrat"]
-    if f["id"] not in _FAM:
+    if font_id not in BY_ID:
+        font_id = "montserrat" if "montserrat" in BY_ID else FONTS[0]["id"]
+    if font_id not in _FAM:
         fam = None
-        for k in ("regular", "bold"):
-            if k in f:
-                i = QFontDatabase.addApplicationFont(os.path.join(DATA, f[k]))
-                if i >= 0 and fam is None:
-                    fam = (QFontDatabase.applicationFontFamilies(i) or [None])[0]
-        _FAM[f["id"]] = fam or "Sans Serif"
-    return _FAM[f["id"]]
+        for path in FILES[font_id].values():
+            i = QFontDatabase.addApplicationFont(path)
+            if i >= 0 and fam is None:
+                fam = (QFontDatabase.applicationFontFamilies(i) or [None])[0]
+        _FAM[font_id] = fam or "Sans Serif"
+    return _FAM[font_id]
+
+
+def is_variable(font_id):
+    return "var" in FILES.get(font_id, {})
 
 
 def has_bold(font_id):
-    return "bold" in (BY_ID.get(font_id) or {})
+    fs = FILES.get(font_id, {})
+    return "bold" in fs or "var" in fs
+
+
+def has_script(font_id, script):
+    return script in (BY_ID.get(font_id) or {}).get("scripts", ["latin"])
 
 
 def qfont(font_id, bold=False, track=0.0):
     f = QFont(family(font_id))
     f.setPixelSize(int(REF))
-    f.setWeight(QFont.Bold if (bold and has_bold(font_id)) else QFont.Normal)
+    weight = bold if type(bold) is int else (700 if bold else 400)       # True/False or a number like 300
+    if weight > 400 and not has_bold(font_id):
+        weight = 400
+    if is_variable(font_id) and hasattr(f, "setVariableAxis"):
+        f.setVariableAxis(QFont.Tag("wght"), weight)
+    else:
+        f.setWeight(QFont.Bold if weight >= 600 else QFont.Normal)
     f.setStyleStrategy(QFont.PreferOutline)
     f.setHintingPreference(QFont.PreferNoHinting)
     if track:

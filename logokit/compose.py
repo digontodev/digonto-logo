@@ -5,20 +5,23 @@ import math
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QPainterPath, QTransform
 
-from . import custom, icons, marks, palettes, textkit
+from . import custom, generate, icons, marks, namefx, palettes, textkit
 from .scene import Grad, Scene
 
 LAYOUTS = [("horizontal", "Symbol left"), ("stacked", "Symbol on top"), ("twoline", "Two lines"), ("wordmark", "Wordmark"),
            ("emblem", "Round emblem"), ("stamp", "Stamp"), ("badge", "Name badge"), ("frame", "Framed"), ("symbol", "Symbol only")]
 CMODES = [("solid", "Solid, symbol cut out"), ("duo", "Solid, 2 colors"), ("outline", "Outline"), ("soft", "Soft tint")]
-TWO = [("none", "One color"), ("first", "First word accent"), ("last", "Last word accent"), ("weight", "First word bold")]
+TWO = [("none", "One color"), ("first", "First word accent"), ("last", "Last word accent"), ("weight", "First word bold"),
+       ("weight_last", "Last word bold"), ("light", "First bold, rest light"), ("alt", "Light / bold, word by word"), ("accent_bold", "First word bold + accent")]
 
 DEFAULT = {
     "name": "Your Brand", "tagline": "",
     "layout": "horizontal",
     "symbol": {"kind": "icon", "icon": "star", "iw": "fill", "mark": "orbit", "letters": "", "container": "none", "cmode": "solid",
-               "scale": 1.0, "grad": False},
-    "font": {"id": "montserrat", "bold": True, "case": "upper", "track": 0.04, "two": "none", "size": 1.0},
+               "scale": 1.0, "grad": False, "mstyle": "plain", "astyle": "radial", "avar": 0, "line": "none"},
+    "swap": {"on": False, "letter": "", "icon": "", "iw": "fill"},
+    "font": {"id": "montserrat", "bold": True, "case": "upper", "track": 0.04, "two": "none", "size": 1.0,
+             "slant": 0.0, "stretch": 1.0, "bend": 0.0, "nstyle": "solid", "cut": "none", "shadow": "none", "ngrad": False},
     "tfont": {"id": "montserrat", "bold": False, "case": "upper", "track": 0.2, "scale": 1.0, "fit": True},
     "colors": {"primary": "#C2395C", "secondary": "#E0662A", "text": "#0F3D2E", "bg": "#F4FAF7"},
     "name_role": "text", "tag_role": "muted", "gap": 1.0, "divider": False, "deco": "none", "fill": True,
@@ -64,6 +67,12 @@ def fit(path, size, cx, cy):
 
 def glyph_parts(s):
     """the symbol's drawing without container: [(path, role)] in its own coordinates"""
+    parts = _raw_parts(s)
+    line = s["symbol"].get("line", "none")
+    return generate.line_art(parts, line) if parts and line != "none" else parts
+
+
+def _raw_parts(s):
     sy = s["symbol"]
     kind = sy["kind"]
     if kind == "icon":
@@ -77,11 +86,10 @@ def glyph_parts(s):
             out.append((p, c if (sy.get("keep") and c) else "a"))
         return out
     if kind == "monogram":
-        f = s["font"]
         t = (sy.get("letters") or initials(s["name"])).strip() or "?"
-        fid = "montserrat" if textkit.BY_ID.get(f["id"], {}).get("cat") == "script" else f["id"]
-        p, _ = textkit.run_path(t, fid, True, 100, 0.02)
-        return [(p, "a")]
+        return generate.monogram(t, s["font"]["id"], sy.get("mstyle", "plain"))
+    if kind == "abstract":
+        return generate.abstract(s["name"], sy.get("astyle", "radial"), int(sy.get("avar", 0)), s["font"]["id"])
     return []
 
 
@@ -125,7 +133,7 @@ def symbol(s, S):
     k = gsize / max(box.width(), box.height()) if not box.isEmpty() else 1
     tr = QTransform().translate(S / 2, S / 2 + (S * 0.015 if cont == "shield" else 0)).scale(k, k).translate(-box.center().x(), -box.center().y())
     placed = [(tr.map(p), role) for p, role in parts]
-    multi = sy["kind"] == "mark" or (sy["kind"] == "custom" and bool(sy.get("keep")) and any(r.startswith("#") for _, r in parts))
+    multi = sy["kind"] in ("mark", "abstract") or (sy["kind"] == "monogram" and any(r != "a" for _, r in parts)) or (sy["kind"] == "custom" and bool(sy.get("keep")) and any(r.startswith("#") for _, r in parts))
     if cont == "ring":
         items.append((cp, prim))
         items += [(p, paint_of(role)) for p, role in placed]
@@ -192,14 +200,82 @@ def name_runs(s, text=None):
             runs.append((w + sp, f["id"], f["bold"], "primary" if i == 0 else base_role))
         elif two == "last":
             runs.append((w + sp, f["id"], f["bold"], "primary" if i == len(words) - 1 else base_role))
+        elif two == "weight":
+            runs.append((w + sp, f["id"], i == 0, base_role))
+        elif two == "weight_last":
+            runs.append((w + sp, f["id"], i == len(words) - 1, base_role))
+        elif two == "light":
+            runs.append((w + sp, f["id"], True if i == 0 else 300, base_role))
+        elif two == "alt":
+            runs.append((w + sp, f["id"], 300 if i % 2 == 0 else True, base_role))
+        elif two == "accent_bold":
+            runs.append((w + sp, f["id"], i == 0, "primary" if i == 0 else base_role))
         else:
-            runs.append((w + sp, f["id"], (i == 0) and True, base_role))
+            runs.append((w + sp, f["id"], f["bold"], base_role))
     return runs
 
 
+def _swap_target(text, letter):
+    """index of the letter to swap: the chosen one, else the first o / a / e / any letter"""
+    low = text.lower()
+    for c in ([letter.lower()] if letter.strip() else []) + ["o", "a", "e"]:
+        if c and c in low:
+            return low.index(c)
+    for i, c in enumerate(text):
+        if c.isalnum():
+            return i
+    return -1
+
+
+def _split_runs(runs, at):
+    """split the runs so the character at position `at` is a run of its own; returns (runs, index of that run)"""
+    out, pos, target = [], 0, -1
+    for text, fid, bold, role in runs:
+        if pos <= at < pos + len(text):
+            j = at - pos
+            for piece, mine in ((text[:j], False), (text[j], True), (text[j + 1:], False)):
+                if piece:
+                    if mine:
+                        target = len(out)
+                    out.append((piece, fid, bold, role))
+        elif text:
+            out.append((text, fid, bold, role))
+        pos += len(text)
+    return out, target
+
+
+def swap_icon(s):
+    sw = s.get("swap") or {}
+    if sw.get("icon"):
+        return sw["icon"], sw.get("iw", "fill")
+    sy = s["symbol"]
+    return (sy["icon"], sy["iw"]) if sy["kind"] == "icon" else ("star", "fill")
+
+
 def build_name(s, size):
-    runs, ink = textkit.text_runs(name_runs(s), size, s["font"]["track"])
-    return [(p, color(s, role)) for p, role in runs], ink
+    spec = name_runs(s)
+    sw = s.get("swap") or {}
+    target = -1
+    if sw.get("on"):
+        at = _swap_target("".join(r[0] for r in spec), sw.get("letter", ""))
+        if at >= 0:
+            spec, target = _split_runs(spec, at)
+    runs, ink = textkit.text_runs(spec, size, s["font"]["track"])
+    if 0 <= target < len(runs):
+        p, role = runs[target]
+        r = p.boundingRect()
+        if not r.isEmpty():
+            name, w = swap_icon(s)
+            ic = icons.path(name, w)
+            if s["symbol"].get("line", "none") != "none":
+                ic = generate.line_art([(ic, "a")], s["symbol"]["line"])[0][0]
+            side = max(r.height(), r.width()) * 1.02
+            ic = fit(ic, side, r.center().x(), r.center().y())
+            runs[target] = (ic, "primary" if role == s["name_role"] else role)
+            ink = QRectF()
+            for q, _ in runs:
+                ink = ink.united(q.boundingRect()) if not ink.isEmpty() else q.boundingRect()
+    return namefx.apply(s, [(p, color(s, role)) for p, role in runs], size)
 
 
 def build_tag(s, size, width=None):
@@ -338,14 +414,14 @@ def _twoline(s, sc):
     cap = _cap(s, size)
     r1, i1 = textkit.text_runs(name_runs(s, l1), size, f["track"])
     r2, i2 = textkit.text_runs(name_runs(s, l2), size, f["track"])
-    if f.get("two") in ("first", "last", "weight"):
+    if f.get("two") in ("first", "last"):
         # accent applies per line here: first line / last line
         role1 = "primary" if f["two"] == "first" else s["name_role"]
         role2 = "primary" if f["two"] == "last" else s["name_role"]
         r1 = [(p, role1) for p, _ in r1]
         r2 = [(p, role2) for p, _ in r2]
-    n1 = [(p, color(s, r)) for p, r in r1]
-    n2 = [(p, color(s, r)) for p, r in r2]
+    n1, i1 = namefx.apply(s, [(p, color(s, r)) for p, r in r1], size)
+    n2, i2 = namefx.apply(s, [(p, color(s, r)) for p, r in r2], size)
     items, sw, sh = symbol(s, F * 1.3)
     lead = cap * 1.42
     has_tag = bool(s["tagline"].strip())

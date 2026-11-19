@@ -10,14 +10,14 @@ sys.path.insert(0, HERE)
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QColor, QFont, QIcon, QImage, QKeySequence, QPainter, QPainterPath, QPen, QPixmap
-from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QColorDialog, QComboBox, QFileDialog, QFrame, QGridLayout,
+from PySide6.QtWidgets import (QStyle, QStyledItemDelegate, QApplication, QButtonGroup, QCheckBox, QColorDialog, QComboBox, QFileDialog, QFrame, QGridLayout,
                                QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
                                QPlainTextEdit, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSlider, QSpinBox,
                                QStackedWidget, QTabWidget, QVBoxLayout, QWidget)
 
 import digonto_ui as ui
 from logokit import __version__ as VERSION
-from logokit import compose, custom, export, icons, ideas, kit, marks, palettes, textkit
+from logokit import compose, custom, export, generate, icons, namefx, ideas, kit, marks, palettes, textkit
 from logokit.scene import paint
 
 APP_NAME = "Digonto Logo"
@@ -72,10 +72,10 @@ def heading(t):
     return l
 
 
-def chips(options, current, on_change, multi=False, parent=None):
-    """row of toggle buttons. options = [(key, label)]. Returns (widget, group dict key->button)"""
+def chips(options, current, on_change, multi=False, parent=None, cols=0):
+    """row of toggle buttons (or a grid with `cols` columns). options = [(key, label)]. Returns (widget, group dict key->button)"""
     w = QWidget(parent)
-    lay = QHBoxLayout(w)
+    lay = QGridLayout(w) if cols else QHBoxLayout(w)
     lay.setContentsMargins(0, 0, 0, 0)
     lay.setSpacing(6)
     btns = {}
@@ -87,10 +87,14 @@ def chips(options, current, on_change, multi=False, parent=None):
         b.setChecked(k == current if not multi else k in (current or []))
         b.setStyleSheet("QPushButton{padding:5px 11px; border-radius:15px;} QPushButton:checked{background:qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #FF6F8E, stop:1 #FFB05A); color:#2A1241; border-color:#FF6F8E;}")
         grp.addButton(b)
+        if cols:
+            lay.addWidget(b, len(btns) // cols, len(btns) % cols)
+        else:
+            lay.addWidget(b)
         btns[k] = b
-        lay.addWidget(b)
         b.clicked.connect(lambda _=False, k=k: on_change(k))
-    lay.addStretch()
+    if not cols:
+        lay.addStretch()
     return w, btns
 
 
@@ -146,6 +150,21 @@ class LogoView(QWidget):
         p.setClipping(False)
         p.setPen(QPen(QColor("#DDD3E9"), 1))
         p.drawRoundedRect(r, self.radius, self.radius)
+
+
+class FontPreviewDelegate(QStyledItemDelegate):
+    """the font list: each name is drawn in its own font, loaded only when it becomes visible"""
+    def sizeHint(self, opt, idx):
+        return QSize(200, 34)
+
+    def paint(self, p, opt, idx):
+        self.initStyleOption(opt, idx)
+        fid = idx.data(Qt.UserRole)
+        if fid:
+            ft = QFont(textkit.family(fid))
+            ft.setPixelSize(19)
+            opt.font = ft
+        QApplication.style().drawControl(QStyle.CE_ItemViewItem, opt, p, opt.widget)
 
 
 class Card(LogoView):
@@ -407,7 +426,7 @@ class BriefPage(QWidget):
 
 
 class IdeasPage(QWidget):
-    FILTERS = [("all", "All"), ("icon", "Symbol"), ("split", "Two-tone"), ("mark", "Shapes"), ("monogram", "Initials"), ("wordmark", "Wordmark"),
+    FILTERS = [("all", "All"), ("icon", "Symbol"), ("split", "Two-tone"), ("mark", "Shapes"), ("monogram", "Initials"), ("abstract", "From name"), ("swap", "Icon in name"), ("wordmark", "Wordmark"),
                ("badge", "Badge"), ("frame", "Framed"), ("emblem", "Emblem"), ("stamp", "Stamp"), ("fav", "\u2665 Favorites")]
 
     def __init__(self, win):
@@ -557,7 +576,7 @@ class Editor(QWidget):
         self.push(group or ".".join(map(str, path)))
         d = self.spec
         for k in path[:-1]:
-            d = d[k]
+            d = d.setdefault(k, {})
         d[path[-1]] = value
         self.schedule()
 
@@ -626,7 +645,7 @@ class Editor(QWidget):
     def build_symbol_tab(self):
         v = self.scroll_tab("Symbol")
         v.addWidget(heading("Kind"))
-        w, self.kind_btns = chips([("icon", "Icon"), ("mark", "Shape"), ("monogram", "Initials"), ("custom", "My own"), ("none", "None")], "icon", lambda k: self.set("symbol", "kind", value=k))
+        w, self.kind_btns = chips([("icon", "Icon"), ("mark", "Shape"), ("monogram", "Initials"), ("abstract", "From the name"), ("custom", "My own"), ("none", "None")], "icon", self.set_kind, cols=3)
         v.addWidget(w)
         self.sym_stack = QStackedWidget()
         # icons
@@ -634,7 +653,7 @@ class Editor(QWidget):
         il = QVBoxLayout(iw)
         il.setContentsMargins(0, 6, 0, 0)
         self.i_search = QLineEdit()
-        self.i_search.setPlaceholderText("Search 1,494 icons: pizza, coffee, heart, rocket ...")
+        self.i_search.setPlaceholderText(f"Search {icons.count():,} icons: pizza, coffee, heart, rocket ...")
         self.i_search.textChanged.connect(lambda _: self.fill_icons())
         il.addWidget(self.i_search)
         self.i_list = QListWidget()
@@ -647,9 +666,13 @@ class Editor(QWidget):
         self.i_list.setMinimumHeight(250)
         self.i_list.itemClicked.connect(lambda it: self.set("symbol", "icon", value=it.data(Qt.UserRole), group="icon") or self.set("symbol", "kind", value="icon", group="icon"))
         il.addWidget(self.i_list)
-        self.c_iw = self.combo([("fill", "Solid"), ("bold", "Outline")], lambda k: self.set("symbol", "iw", value=k))
+        self.c_iw = self.combo(icons.WEIGHTS, lambda k: (self.set("symbol", "iw", value=k), self.fill_icons()))
         il.addLayout(self.row("Style", self.c_iw))
-        lic = QLabel("Icons: Phosphor Icons (MIT licence). Free for commercial use.")
+        self.c_iset = self.combo([("all", "All icon sets")] + icons.SETS, lambda k: self.fill_icons())
+        il.addLayout(self.row("Icon set", self.c_iset))
+        lic = QLabel(f"{icons.count():,} icons: Phosphor, Tabler, Lucide, Material Symbols, Iconoir, Heroicons, Bootstrap "
+                     "(MIT / ISC / Apache 2.0). Free for commercial use.")
+        lic.setWordWrap(True)
         lic.setStyleSheet("color:#6E6475; font-size:11px;")
         il.addWidget(lic)
         self.sym_stack.addWidget(iw)
@@ -706,7 +729,10 @@ class Editor(QWidget):
         self.e_letters.setPlaceholderText("empty = first letters of the name")
         self.e_letters.textChanged.connect(lambda t: self.set("symbol", "letters", value=t, group="letters"))
         gl.addLayout(self.row("Letters", self.e_letters))
-        gl.addWidget(QLabel("Initials use the bold name font."))
+        self.g_list = self.preview_grid(64)
+        self.g_list.itemClicked.connect(lambda it: self.set("symbol", "mstyle", value=it.data(Qt.UserRole), group="ms") or self.set_kind("monogram", group="ms"))
+        gl.addWidget(self.g_list)
+        gl.addWidget(QLabel(f"{len(generate.MONO_STYLES)} initial styles, drawn with your name font."))
         gl.addStretch(1)
         self.sym_stack.addWidget(gw)
         cw = QWidget()
@@ -738,7 +764,35 @@ class Editor(QWidget):
         cl.addStretch(1)
         self.sym_stack.addWidget(cw)
         self.sym_stack.addWidget(QWidget())
+        # abstract marks made from the name (stack index 5)
+        aw = QWidget()
+        al = QVBoxLayout(aw)
+        al.setContentsMargins(0, 6, 0, 0)
+        self.a_list = self.preview_grid(64)
+        self.a_list.itemClicked.connect(lambda it: self.set("symbol", "astyle", value=it.data(Qt.UserRole), group="as") or self.set_kind("abstract", group="as"))
+        al.addWidget(self.a_list)
+        more = QPushButton("↻  Another version")
+        more.clicked.connect(lambda: self.set("symbol", "avar", value=int(self.spec["symbol"].get("avar", 0)) + 1))
+        al.addWidget(more)
+        an = QLabel("These marks grow from the letters of your name: your name always makes the same marks, "
+                    "another name makes other ones. Press 'Another version' for new ones.")
+        an.setWordWrap(True)
+        an.setStyleSheet("color:#6E6475; font-size:11px;")
+        al.addWidget(an)
+        al.addStretch(1)
+        self.sym_stack.addWidget(aw)
         v.addWidget(self.sym_stack)
+        v.addWidget(heading("Drawing"))
+        self.c_line = self.combo(generate.LINE_MODES, lambda k: self.set("symbol", "line", value=k))
+        v.addLayout(self.row("Lines", self.c_line))
+        self.k_swap = QCheckBox("Put the icon (from the Icon page) into the name")
+        self.k_swap.toggled.connect(lambda b: self.set("swap", "on", value=b))
+        v.addWidget(self.k_swap)
+        self.e_swap = QLineEdit()
+        self.e_swap.setMaxLength(1)
+        self.e_swap.setPlaceholderText("empty = first O, A or E")
+        self.e_swap.textChanged.connect(lambda t: self.set("swap", "letter", value=t, group="swapl"))
+        v.addLayout(self.row("Letter", self.e_swap))
         v.addWidget(heading("Container"))
         self.c_cont = self.combo([("none", "None")] + [(c, c.capitalize()) for c in marks.CONTAINERS], lambda k: self.set("symbol", "container", value=k))
         v.addLayout(self.row("Shape", self.c_cont))
@@ -754,12 +808,72 @@ class Editor(QWidget):
         v.addWidget(self.k_split)
         v.addStretch(1)
 
+    KIND_PAGE = {"icon": 0, "mark": 1, "monogram": 2, "custom": 3, "none": 4, "abstract": 5}
+
+    def set_kind(self, k, group=None):
+        self.set("symbol", "kind", value=k, group=group)
+        for key, b in self.kind_btns.items():
+            b.setChecked(key == k)
+        self.sym_stack.setCurrentIndex(self.KIND_PAGE.get(k, 4))
+
+    def preview_grid(self, px):
+        g = QListWidget()
+        g.setViewMode(QListWidget.IconMode)
+        g.setIconSize(QSize(px, px))
+        g.setGridSize(QSize(px + 22, px + 22))
+        g.setResizeMode(QListWidget.Adjust)
+        g.setMovement(QListWidget.Static)
+        g.setUniformItemSizes(True)
+        g.setMinimumHeight(260)
+        return g
+
+    def fill_generated(self):
+        """refresh the initials and name-mark previews when the name, letters, font or version changed"""
+        s = self.spec
+        sy = s["symbol"]
+        key = (s["name"], sy.get("letters", ""), s["font"]["id"], sy.get("avar", 0), s["colors"]["primary"], s["colors"]["secondary"])
+        if getattr(self, "_gen_key", None) == key:
+            return
+        self._gen_key = key
+        col = {"a": QColor(s["colors"]["primary"]), "b": QColor(s["colors"]["secondary"]), "c": QColor(palettes.shade(s["colors"]["primary"], -0.35))}
+
+        def item(parts, key, tip, px=64):
+            def draw(p, size, parts=parts):
+                u = QPainterPath()
+                for q, _ in parts:
+                    u.addPath(q)
+                r = u.boundingRect()
+                if r.isEmpty():
+                    return
+                k = (size * 0.9) / max(r.width(), r.height())
+                p.translate(size / 2, size / 2)
+                p.scale(k, k)
+                p.translate(-r.center().x(), -r.center().y())
+                for q, role in parts:
+                    p.fillPath(q, col.get(role, col["a"]))
+            it = QListWidgetItem(glyph_icon(draw, px), "")
+            it.setData(Qt.UserRole, key)
+            it.setToolTip(tip)
+            return it
+        letters = (sy.get("letters") or compose.initials(s["name"])).strip() or "?"
+        self.g_list.clear()
+        for k, label in generate.MONO_STYLES:
+            self.g_list.addItem(item(generate.monogram(letters, s["font"]["id"], k), k, label))
+        self.a_list.clear()
+        for k, label in generate.ABSTRACT_STYLES:
+            self.a_list.addItem(item(generate.abstract(s["name"], k, int(sy.get("avar", 0)), s["font"]["id"]), k, label))
+
     def fill_icons(self):
         q = self.i_search.text().strip()
-        names = icons.search(q, 150) if q else (self.win.suggested_icons() or icons.search("", 150))
+        iset = self.c_iset.currentData() if hasattr(self, "c_iset") else "all"
+        if q or iset not in ("all", None):
+            names = icons.search(q, 300, iset)
+        else:
+            names = self.win.suggested_icons() or icons.search("", 300)
+        self.i_list.setUpdatesEnabled(False)
         self.i_list.clear()
         col = self.spec["colors"]["primary"]
-        for n in names[:150]:
+        for n in names[:300]:
             def draw(p, size, n=n):
                 path = icons.path(n, self.spec["symbol"].get("iw", "fill"))
                 r = path.boundingRect()
@@ -770,8 +884,9 @@ class Editor(QWidget):
                 p.fillPath(path, QColor("#1A2B23"))
             it = QListWidgetItem(glyph_icon(draw, 44), "")
             it.setData(Qt.UserRole, n)
-            it.setToolTip(n.replace("-", " "))
+            it.setToolTip(f"{icons.base(n).replace('-', ' ').replace('_', ' ')}  ({dict(icons.SETS).get(icons.set_of(n), '')})")
             self.i_list.addItem(it)
+        self.i_list.setUpdatesEnabled(True)
 
     # ---- tab: layout
     def build_layout_tab(self):
@@ -875,10 +990,19 @@ class Editor(QWidget):
     def build_type_tab(self):
         v = self.scroll_tab("Fonts")
         v.addWidget(heading("Name font"))
-        self.c_cat = self.combo([("all", "All fonts")] + textkit.CATS, lambda k: self.fill_fonts())
-        v.addLayout(self.row("Group", self.c_cat))
+        self.f_search = QLineEdit()
+        self.f_search.setPlaceholderText(f"Search {len(textkit.FONTS)} fonts")
+        self.f_search.setClearButtonEnabled(True)
+        self.f_search.textChanged.connect(lambda _: self.fill_fonts())
+        v.addWidget(self.f_search)
+        self.c_cat = self.combo([("all", "All styles")] + textkit.CATS, lambda k: self.fill_fonts())
+        v.addLayout(self.row("Style", self.c_cat))
+        self.c_script = self.combo([("all", "All languages")] + textkit.SCRIPTS, lambda k: self.fill_fonts())
+        v.addLayout(self.row("Language", self.c_script))
         self.f_list = QListWidget()
-        self.f_list.setMinimumHeight(250)
+        self.f_list.setMinimumHeight(300)
+        self.f_list.setUniformItemSizes(True)
+        self.f_list.setItemDelegate(FontPreviewDelegate(self.f_list))   # each font loads when it scrolls into view
         self.f_list.itemClicked.connect(self.pick_font)
         v.addWidget(self.f_list)
         self.k_bold = QCheckBox("Bold")
@@ -888,6 +1012,25 @@ class Editor(QWidget):
         v.addLayout(self.row("Letter space", self.s_track))
         self.s_nsize = self.slider(50, 160, lambda x: self.set("font", "size", value=x / 100, group="nsize"), "nsize")
         v.addLayout(self.row("Name size", self.s_nsize))
+        v.addWidget(heading("Name design"))
+        self.s_slant = self.slider(-20, 20, lambda x: self.set("font", "slant", value=float(x), group="slant"), "slant")
+        v.addLayout(self.row("Slant", self.s_slant))
+        self.s_stretch = self.slider(60, 150, lambda x: self.set("font", "stretch", value=x / 100, group="stretch"), "stretch")
+        v.addLayout(self.row("Width", self.s_stretch))
+        self.s_bend = self.slider(-100, 100, lambda x: self.set("font", "bend", value=x / 100, group="bend"), "bend")
+        v.addLayout(self.row("Curve", self.s_bend))
+        self.c_nstyle = self.combo(namefx.STYLES, lambda k: self.set("font", "nstyle", value=k))
+        v.addLayout(self.row("Letters", self.c_nstyle))
+        self.c_cut = self.combo(namefx.CUTS, lambda k: self.set("font", "cut", value=k))
+        v.addLayout(self.row("Cut", self.c_cut))
+        self.c_shadow = self.combo(namefx.SHADOWS, lambda k: self.set("font", "shadow", value=k))
+        v.addLayout(self.row("Shadow", self.c_shadow))
+        self.k_ngrad = QCheckBox("Gradient from main to second color")
+        self.k_ngrad.toggled.connect(lambda b: self.set("font", "ngrad", value=b))
+        v.addWidget(self.k_ngrad)
+        reset = QPushButton("Reset name design")
+        reset.clicked.connect(self.reset_namefx)
+        v.addWidget(reset)
         v.addWidget(heading("Tagline font"))
         self.c_tf = QComboBox()
         for f in textkit.FONTS:
@@ -904,25 +1047,39 @@ class Editor(QWidget):
         self.k_fit = QCheckBox("Stretch tagline to the width of the name")
         self.k_fit.toggled.connect(lambda b: self.set("tfont", "fit", value=b))
         v.addWidget(self.k_fit)
-        lic = QLabel("All fonts are open source (SIL Open Font License): free for any use.")
+        lic = QLabel(f"{len(textkit.FONTS)} open-source fonts (SIL Open Font License / Apache 2.0): free for any use, also commercial.")
+        lic.setWordWrap(True)
         lic.setStyleSheet("color:#6E6475; font-size:11px;")
         v.addWidget(lic)
         v.addStretch(1)
         self.fill_fonts()
 
+    def reset_namefx(self):
+        self.push("namefx-reset")
+        self.spec["font"].update(slant=0.0, stretch=1.0, bend=0.0, nstyle="solid", cut="none", shadow="none", ngrad=False)
+        self.sync()
+        self.schedule()
+
     def fill_fonts(self):
         cat = self.c_cat.currentData()
+        script = self.c_script.currentData() if hasattr(self, "c_script") else "all"
+        q = self.f_search.text().strip().lower() if hasattr(self, "f_search") else ""
+        sample = dict(textkit.SCRIPTS).get(script, "").split("  ")[0] if script not in ("all", "latin", None) else ""
+        self.f_list.setUpdatesEnabled(False)
         self.f_list.clear()
         for f in textkit.FONTS:
-            if cat in ("all", None) or f["cat"] == cat:
-                it = QListWidgetItem(f["name"])
-                it.setData(Qt.UserRole, f["id"])
-                ft = QFont(textkit.family(f["id"]))
-                ft.setPixelSize(19)
-                it.setFont(ft)
-                self.f_list.addItem(it)
-                if f["id"] == self.spec["font"]["id"]:
-                    self.f_list.setCurrentItem(it)
+            if cat not in ("all", None) and f["cat"] != cat:
+                continue
+            if script not in ("all", None) and script not in f.get("scripts", ["latin"]):
+                continue
+            if q and q not in f["name"].lower():
+                continue
+            it = QListWidgetItem(f["name"] + (f"   {sample}" if sample else ""))
+            it.setData(Qt.UserRole, f["id"])
+            self.f_list.addItem(it)
+            if f["id"] == self.spec["font"]["id"]:
+                self.f_list.setCurrentItem(it)
+        self.f_list.setUpdatesEnabled(True)
 
     def pick_font(self, it):
         fid = it.data(Qt.UserRole)
@@ -1071,7 +1228,7 @@ class Editor(QWidget):
                 c.setCurrentIndex(max(0, i))
             for k, b in self.kind_btns.items():
                 b.setChecked(k == s["symbol"]["kind"])
-            self.sym_stack.setCurrentIndex({"icon": 0, "mark": 1, "monogram": 2, "custom": 3, "none": 4}.get(s["symbol"]["kind"], 4))
+            self.sym_stack.setCurrentIndex(self.KIND_PAGE.get(s["symbol"]["kind"], 4))
             cu = s["symbol"].get("custom") or {}
             self.l_custom.setText((cu.get("name") or "Nothing chosen yet.") + (f"  ({len(cu.get('parts', []))} shapes)" if cu.get("parts") else ""))
             self.k_keep.setChecked(bool(s["symbol"].get("keep")))
@@ -1082,6 +1239,14 @@ class Editor(QWidget):
             self.s_thr.setValue(int(cu.get("threshold", 0.5) * 100))
             self.k_split.setChecked(bool(s["symbol"].get("split")))
             self.e_letters.setText(s["symbol"].get("letters", ""))
+            self.c_line.setCurrentIndex(max(0, self.c_line.findData(s["symbol"].get("line", "none"))))
+            sw = s.get("swap") or {}
+            self.k_swap.setChecked(bool(sw.get("on")))
+            self.e_swap.setText(sw.get("letter", ""))
+            self.fill_generated()
+            for lst, key in ((self.g_list, s["symbol"].get("mstyle", "plain")), (self.a_list, s["symbol"].get("astyle", "radial"))):
+                for i in range(lst.count()):
+                    lst.item(i).setSelected(lst.item(i).data(Qt.UserRole) == key)
             self.s_size.setValue(int(s["symbol"]["scale"] * 100))
             self.k_grad.setChecked(bool(s["symbol"]["grad"]))
             self.s_gap.setValue(int(s["gap"] * 100))
@@ -1091,6 +1256,13 @@ class Editor(QWidget):
             self.k_bold.setChecked(bool(s["font"]["bold"]))
             self.k_bold.setEnabled(textkit.has_bold(s["font"]["id"]))
             self.s_track.setValue(int(s["font"]["track"] * 100))
+            f = s["font"]
+            self.s_slant.setValue(int(round(f.get("slant", 0))))
+            self.s_stretch.setValue(int(round(f.get("stretch", 1.0) * 100)))
+            self.s_bend.setValue(int(round(f.get("bend", 0) * 100)))
+            for c, key, d in ((self.c_nstyle, "nstyle", "solid"), (self.c_cut, "cut", "none"), (self.c_shadow, "shadow", "none")):
+                c.setCurrentIndex(max(0, c.findData(f.get(key, d))))
+            self.k_ngrad.setChecked(bool(f.get("ngrad")))
             self.s_nsize.setValue(int(s["font"].get("size", 1.0) * 100))
             i = self.c_tf.findData(s["tfont"]["id"])
             self.c_tf.setCurrentIndex(max(0, i))
@@ -1358,16 +1530,42 @@ class Main(QMainWindow):
             self.steps.append(b)
             bl.addWidget(b)
         hd = ui.make_header(APP_NAME, "Make a complete logo and brand in minutes", self.icon, self.about, bar)
-        ui.wrap_with_header(self, hd, self.stack)
+        self.rail = ui.Rail(
+            [("new", "new", "New logo (Ctrl+N)", self.start_new),
+             ("open", "open", "Open project (Ctrl+O)", self.open_dialog),
+             ("save", "save", "Save project (Ctrl+S)", self.save_project),
+             ("export", "export", "Export the logo and brand kit (Ctrl+E)", self.go_export),
+             None,
+             ("ideas", "wand", "Ideas (step 2)", lambda: self.goto(1)),
+             ("customize", "pen", "Customize (step 3)", lambda: self.goto(2))],
+            [("settings", "settings", "Settings and help", self.rail_settings)])
+        body = QWidget()
+        bh = QHBoxLayout(body)
+        bh.setContentsMargins(0, 0, 0, 0)
+        bh.setSpacing(0)
+        bh.addWidget(self.rail)
+        self.start = ui.StartScreen(
+            "Make a complete logo and brand in minutes - ideas, symbols, fonts, colours and a brand kit",
+            [("Create new project", "new", self.start_new, True), ("Open project …", "open", self.open_dialog, False)],
+            "or drop a Digonto Logo project here", lambda: ui.recent_paths(SLUG), self.open_project)
+        self.outer = QStackedWidget()
+        self.outer.addWidget(self.start)
+        self.outer.addWidget(self.stack)
+        bh.addWidget(self.outer, 1)
+        self.steps_bar = bar
+        self.setAcceptDrops(True)
+        ui.wrap_with_header(self, hd, body)
         self.goto(0)
         if path and os.path.isfile(path):
             self.open_project(path)
+        else:
+            self.show_start()
 
     def build_menu(self):
         mb = self.menuBar()
         fm = mb.addMenu("File")
         for text, sc, fn in (("New", "Ctrl+N", self.new), ("Open project ...", "Ctrl+O", self.open_dialog), ("Save project", "Ctrl+S", self.save_project),
-                             ("Save project as ...", "Ctrl+Shift+S", lambda: self.save_project(as_new=True)), ("Close project", "Ctrl+W", self.new)):
+                             ("Save project as ...", "Ctrl+Shift+S", lambda: self.save_project(as_new=True)), ("Close project", "Ctrl+W", self.close_project)):
             fm.addAction(QAction(text, self, shortcut=sc, triggered=fn))
         fm.addSeparator()
         fm.addAction(QAction("Export ...", self, shortcut="Ctrl+E", triggered=self.go_export))
@@ -1385,8 +1583,48 @@ class Main(QMainWindow):
         hm = mb.addMenu("Help")
         hm.addAction(QAction("About Digonto Logo", self, triggered=self.about))
 
+    def rail_settings(self):
+        from PySide6.QtWidgets import QMenu
+        m = QMenu(self)
+        m.addAction("Save project as …", lambda: self.save_project(as_new=True))
+        m.addSeparator()
+        m.addAction("About Digonto Logo", self.about)
+        b = self.rail.button("settings")
+        m.exec(b.mapToGlobal(b.rect().topRight()))
+
     # ---- navigation
+    def show_start(self):
+        self.start.refresh()
+        self.outer.setCurrentIndex(0)
+        self.steps_bar.hide()
+        self.rail.set_enabled(["save", "export", "ideas", "customize"], False)
+
+    def start_new(self):
+        self.new()
+        self.goto(0)
+
+    def dragEnterEvent(self, e):
+        if e.mimeData().hasUrls():
+            e.acceptProposedAction()
+            if self.outer.currentIndex() == 0:
+                self.start.set_dropping(True)
+
+    def dragLeaveEvent(self, e):
+        self.start.set_dropping(False)
+
+    def dropEvent(self, e):
+        self.start.set_dropping(False)
+        for u in e.mimeData().urls():
+            p = u.toLocalFile()
+            if p.lower().endswith((".dlgo", ".ptlogo")) and self.maybe_save():
+                self.open_project(p)
+                break
+
     def goto(self, i):
+        if hasattr(self, "outer"):
+            self.outer.setCurrentIndex(1)
+            self.steps_bar.show()
+            self.rail.set_enabled(["save", "export", "ideas", "customize"], True)
         if i >= 2 and not self.editor_ready():
             QMessageBox.information(self, APP_NAME, "Pick an idea first (step 2).")
             i = 1 if self.ideas_all else 0
@@ -1482,6 +1720,13 @@ class Main(QMainWindow):
         self.favs, self.ideas_all, self._editor_loaded = [], [], False
         self.brief_page.set_brief({})
         self.goto(0)
+
+    def close_project(self):
+        if not self.maybe_save():
+            return
+        self.dirty = False
+        self.new()
+        self.show_start()
 
     def open_dialog(self):
         p, _ = QFileDialog.getOpenFileName(self, "Open project", "", "Digonto Logo project (*.dlgo *.ptlogo)")
